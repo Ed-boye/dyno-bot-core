@@ -28,9 +28,7 @@ namespace Dynobot.Services
                     await channel.ModifyAsync(x => x.Name = channel.Users.First().Game.Value.Name);
 
                     // Add a new channel
-                    ///
-                    // TODO: Why aren't I able to add dyno to the channel?
-                    ///
+                    // TODO: Check if we can create a channel with permissions already on it, Discord API seems to support this...
                     var newChannel = await channel.Guild.CreateVoiceChannelAsync("Join to change name");
                     await newChannel.AddPermissionOverwriteAsync(dyno, channel.GetPermissionOverwrite(dyno).Value);
                 }
