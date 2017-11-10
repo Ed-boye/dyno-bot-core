@@ -63,9 +63,12 @@ namespace Dynobot.Services
                 if(!checkLastChannel(channel.Guild))
                 {
                     await channel.DeleteAsync();
+                    // TODO: Currently deletes and creates if you switch from one dynamic to the second dynamic, fix is probably needed here?
                 }
             }
         }
+
+        // Try to find the top game, return null if no games exist in channel or no majority game
         private Game? findTopGameInChannel(SocketVoiceChannel channel) 
         {
             var gamesDict = new Dictionary<Game?, int>();
@@ -114,6 +117,9 @@ namespace Dynobot.Services
 
             return topGame;
         }
+
+        // Check to see if only one dynamic channel exists
+        // TODO: Save this in a DB instead? Always updated state needed then...
         private bool checkLastChannel(SocketGuild guild) 
         {
             // TODO turn this into a linq expression, probably...
