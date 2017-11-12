@@ -6,64 +6,80 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Net;
 using Discord.WebSocket;
+using Dynobot;
+using log4net;
 
 namespace Dynobot.Services 
 {
     public class ChannelMod
     {
         IUser dyno;
-        public ChannelMod (IUser dyno) 
+        log4net.ILog log;
+        public ChannelMod (IUser dyno, ILog log) 
         {
            this.dyno = dyno;
+           this.log = log;
         }
 
-        public async Task RenewChannels(SocketVoiceChannel channel) 
+        // TODO: Add Guild Name to Debug
+        public async Task RenewChannels(SocketVoiceChannel channel, bool userJoined) 
         {
+            log.Debug("Renewing Channel: " + channel.Id + " - \"" + channel.Guild.Name + "\\" + channel.Name + "\"");
             //if only user
             if (channel.Users.Count == 1)
             {
                 if (channel.Users.First().Game != null)
                 {
                     // Set name to user's game
-                    await channel.ModifyAsync(x => x.Name = channel.Users.First().Game.Value.Name);
-
-                    // Add a new channel
-                    ///
-                    // TODO: Why aren't I able to add dyno to the channel?
-                    ///
-                    var newChannel = await channel.Guild.CreateVoiceChannelAsync("Join to change name");
-                    await newChannel.AddPermissionOverwriteAsync(dyno, channel.GetPermissionOverwrite(dyno).Value);
+                    string gameName = channel.Users.First().Game.Value.Name;
+                    await channel.ModifyAsync(x => x.Name = gameName);
+                    log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + gameName + "\"");
                 }
-                else 
+                else
                 {
                     // Set name to user's name
-                    await channel.ModifyAsync(x => x.Name = channel.Users.First().Username + "'s Channel");
+                    string userChannelName = channel.Users.First().Username + "'s Domain";
+                    await channel.ModifyAsync(x => x.Name = userChannelName);
+                    log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + userChannelName + "\"");
+                }
 
+                if (userJoined)
+                {
                     // Add a new channel
+                    // TODO: Check if we can create a channel with permissions already on it, Discord API seems to support this...
                     var newChannel = await channel.Guild.CreateVoiceChannelAsync("Join to change name");
                     await newChannel.AddPermissionOverwriteAsync(dyno, channel.GetPermissionOverwrite(dyno).Value);
-                }
+                    log.Debug("Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
+                }                
+                
             }
             else if (channel.Users.Count > 1)
             {
-                var topGame = findTopGameInChannel(channel);
+                Game? topGame = findTopGameInChannel(channel);
                 if (topGame != null) 
                 {
                     await channel.ModifyAsync(x => x.Name = topGame.Value.Name);
+                    log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + topGame.Value.Name + "\"");
                 }
                 else // no game being played
                 {
+                    log.Debug("NOT Modifying Channel: " + channel.Id + " - \"" + channel.Name + "\"");
                     //await channel.ModifyAsync(x => x.Name = "Join to Change");
                     //Don't rename, someone already changed it or is already set to default
                 }
             }
             else // nobody here
             {
-                await channel.ModifyAsync(x => x.Name = "Join to change name");
-                if(!checkLastChannel(channel.Guild))
+                if(!checkLastChannel(channel.Guild) && !userJoined)
                 {
                     await channel.DeleteAsync();
-                    // TODO: Currently deletes and creates if you switch from one dynamic to the second dynamic, fix is probably needed here?
+                    log.Debug("Deleted Empty Channel: " + channel.Id + " - \"" + channel.Name + "\"");
+                }
+                else 
+                {
+                    // TODO: Don't revert if not needed?
+                    await channel.ModifyAsync(x => x.Name = "Join to change name");
+                    log.Debug("Reverted final dynamic Channel: " + channel.Id + " - \"" + channel.Name + "\"");
                 }
             }
         }
