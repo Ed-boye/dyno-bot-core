@@ -21,14 +21,87 @@ namespace Dynobot.Services
            this.log = log;
         }
 
-        // TODO: Add Guild Name to Debug
-        public async Task RenewChannels(SocketVoiceChannel channel, bool userJoined) 
+        public async Task UpdateOldChannel(SocketVoiceChannel channel) 
         {
-            log.Debug("Renewing Channel: " + channel.Id + " - \"" + channel.Guild.Name + "\\" + channel.Name + "\"");
+            if (channel.Users.Count == 0)
+            {
+                await revertOrDelete(channel);
+            }
+            else if (channel.Users.Count == 1)
+            {
+                await updateOneUser(channel);
+            }
+            else //(channel.Users.Count > 1)
+            {
+                await updateToTopGame(channel);
+            }
+        }
+
+        public async Task UpdateNewChannel (SocketVoiceChannel channel)
+        {
+            if (channel.Users.Count == 0)
+            {
+                // Shouldn't really hit this ever if called right
+            }
+            else if (channel.Users.Count == 1)
+            {
+                await updateOneUser(channel);
+                
+                // Only user here, create a new channel
+                var newChannel = await channel.Guild.CreateVoiceChannelAsync("Join to change name");
+                await newChannel.AddPermissionOverwriteAsync(dyno, channel.GetPermissionOverwrite(dyno).Value);
+                log.Debug("Nu Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
+            }
+            else //(channel.Users.Count > 1)
+            {
+                await updateToTopGame(channel);
+            }
+        }
+
+        public async Task UpdateExistingChannel (SocketVoiceChannel channel) 
+        {
+            if (channel.Users.Count == 0)
+            {
+                // Shouldn't hit this
+            }
+            else if (channel.Users.Count == 1)
+            {
+                await updateOneUser(channel);
+            }
+            else //(channel.Users.Count > 1)
+            {
+                await updateToTopGame(channel);
+            }
+        }
+
+        // TODO: Currently delets all channels vs just leaving one. Fix
+        public async Task RenewAllChannels(SocketVoiceChannel channel) 
+        {
+            //log.Debug("Renewing Channel: " + channel.Id + " - \"" + channel.Guild.Name + "\\" + channel.Name + "\"");
             //if only user
             if (channel.Users.Count == 1)
             {
-                if (channel.Users.First().Game != null)
+                await updateOneUser(channel);            
+            }
+            else if (channel.Users.Count > 1)
+            {
+                await updateToTopGame(channel);
+                if(checkIsLastChannel(channel))
+                {
+                    var newChannel = await channel.Guild.CreateVoiceChannelAsync("Join to change name");
+                    await newChannel.AddPermissionOverwriteAsync(dyno, channel.GetPermissionOverwrite(dyno).Value);
+                    log.Debug("RA Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
+                }
+            }
+            else // nobody here
+            {
+                await revertOrDelete(channel);
+            }
+        }
+
+        private async Task updateOneUser(SocketVoiceChannel channel)
+        {
+            if (channel.Users.First().Game != null)
                 {
                     // Set name to user's game
                     string gameName = channel.Users.First().Game.Value.Name;
@@ -42,46 +115,37 @@ namespace Dynobot.Services
                     await channel.ModifyAsync(x => x.Name = userChannelName);
                     log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + userChannelName + "\"");
                 }
+        }
 
-                if (userJoined)
-                {
-                    // Add a new channel
-                    // TODO: Check if we can create a channel with permissions already on it, Discord API seems to support this...
-                    var newChannel = await channel.Guild.CreateVoiceChannelAsync("Join to change name");
-                    await newChannel.AddPermissionOverwriteAsync(dyno, channel.GetPermissionOverwrite(dyno).Value);
-                    log.Debug("Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
-                }                
-                
-            }
-            else if (channel.Users.Count > 1)
+        private async Task updateToTopGame(SocketVoiceChannel channel)
+        {
+            Game? topGame = findTopGameInChannel(channel);
+            if (topGame != null) 
             {
-                Game? topGame = findTopGameInChannel(channel);
-                if (topGame != null) 
-                {
-                    await channel.ModifyAsync(x => x.Name = topGame.Value.Name);
-                    log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + topGame.Value.Name + "\"");
-                }
-                else // no game being played
-                {
-                    log.Debug("NOT Modifying Channel: " + channel.Id + " - \"" + channel.Name + "\"");
-                    //await channel.ModifyAsync(x => x.Name = "Join to Change");
-                    //Don't rename, someone already changed it or is already set to default
-                }
+                await channel.ModifyAsync(x => x.Name = topGame.Value.Name);
+                log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + topGame.Value.Name + "\"");
             }
-            else // nobody here
+            else // no game being played
             {
-                if(!checkLastChannel(channel.Guild) && !userJoined)
+                log.Debug("Nu NOT Modifying Channel: " + channel.Id + " - \"" + channel.Name + "\"");
+                //await channel.ModifyAsync(x => x.Name = "Join to Change");
+                //Don't rename, someone already changed it or is already set to default
+            }
+        }
+
+        private async Task revertOrDelete(SocketVoiceChannel channel) 
+        {
+            if(!checkIsLastChannel(channel))
                 {
                     await channel.DeleteAsync();
-                    log.Debug("Deleted Empty Channel: " + channel.Id + " - \"" + channel.Name + "\"");
+                    log.Debug("OL Deleted Empty Channel: " + channel.Id + " - \"" + channel.Name + "\"");
                 }
                 else 
                 {
                     // TODO: Don't revert if not needed?
                     await channel.ModifyAsync(x => x.Name = "Join to change name");
-                    log.Debug("Reverted final dynamic Channel: " + channel.Id + " - \"" + channel.Name + "\"");
+                    log.Debug("OL Reverted final dynamic Channel: " + channel.Id + " - \"" + channel.Name + "\"");
                 }
-            }
         }
 
         // Try to find the top game, return null if no games exist in channel or no majority game
@@ -130,21 +194,20 @@ namespace Dynobot.Services
                     topGame = list.ElementAt(0).Key;
                 }
             }
-
             return topGame;
         }
 
         // Check to see if only one dynamic channel exists
         // TODO: Save this in a DB instead? Always updated state needed then...
-        private bool checkLastChannel(SocketGuild guild) 
+        private bool checkIsLastChannel(SocketVoiceChannel channel) 
         {
             // TODO turn this into a linq expression, probably...
             int dynamicChannels = 0;
-            foreach(SocketVoiceChannel channel in guild.VoiceChannels) 
+            foreach(SocketVoiceChannel voiceChannel in channel.Guild.VoiceChannels) 
             {
                 // TODO: Check this call out? If not null may be a better check
                 // channel.GetPermissionOverwrite(dyno); 
-                if(channel.PermissionOverwrites.ToList().Exists(x => x.TargetId == dyno.Id))
+                if(voiceChannel.PermissionOverwrites.ToList().Exists(x => x.TargetId == dyno.Id))
                 {
                     dynamicChannels++;
                 }

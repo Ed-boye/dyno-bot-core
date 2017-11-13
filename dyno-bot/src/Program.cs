@@ -79,7 +79,7 @@ namespace Dynobot
                 {
                     if (authGrant(channel))
                     {
-                        Task.Run(() => channelMod.RenewChannels(channel, false)).Wait();
+                        Task.Run(() => channelMod.RenewAllChannels(channel)).Wait();
                     }
                 }
             }
@@ -106,10 +106,11 @@ namespace Dynobot
         // Run renewal when a user's status changes, i.e., game is launched or termianted
         private async Task UserUpdatedAsync(SocketUser before, SocketUser after)
         {
+            log.Debug("Hit UserUpdateAsync user: " + after.Username);
             var user = after as SocketGuildUser;
             if (user.VoiceChannel != null && authGrant(user.VoiceChannel))
             {
-                await channelMod.RenewChannels(user.VoiceChannel, false);
+                await channelMod.UpdateExistingChannel(user.VoiceChannel);
             }
         }
 
@@ -134,11 +135,11 @@ namespace Dynobot
             {
                 if  (userJoined) 
                 {
-                    await channelMod.RenewChannels(voiceChannel, userJoined);
+                    await channelMod.UpdateNewChannel(voiceChannel);
                 }
                 else 
                 {
-                    await channelMod.RenewChannels(voiceChannel, userJoined);
+                    await channelMod.UpdateOldChannel(voiceChannel);
                 }
             }
         }
