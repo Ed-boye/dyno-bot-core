@@ -18,7 +18,6 @@ namespace Dynobot
     {
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(typeof(Program));
         private DiscordSocketClient _client;
-        private StringBuilder connectedGuilds;
         private ChannelMod channelMod;
 
         public static void Main(string[] args)
@@ -26,11 +25,11 @@ namespace Dynobot
 
         public async Task MainAsync()
         {
+            // Initialize client and guild dictionary
             _client = new DiscordSocketClient();
-            connectedGuilds = new StringBuilder();
             
             // Get token
-            Token token = JsonConvert.DeserializeObject<Token>(File.ReadAllText(@"token.json"));
+            Token token = JsonConvert.DeserializeObject<Token>(File.ReadAllText(@"token.json")); 
 
             // Initialize Logger
             XmlDocument log4netConfig = new XmlDocument();
@@ -44,8 +43,8 @@ namespace Dynobot
             _client.Log += Log;
             _client.UserVoiceStateUpdated += UserVoiceStateUpdatedAsync;
             _client.GuildMemberUpdated += UserUpdatedAsync;
-            _client.JoinedGuild += UpdateGuildList; ;
-            _client.LeftGuild += UpdateGuildList;
+            _client.JoinedGuild += JoinedGuild; ;
+            _client.LeftGuild += LeftGuild;
             _client.Connected += Connected;
             _client.Ready += Init;
 
@@ -65,40 +64,26 @@ namespace Dynobot
 
         // TODO: Supporting multiple guilds could make this costly, move to DB? Firebase?
         // Run start-up renewals
-        private Task Init()
+        private async Task Init()
         {
-            // For each of Dyno's guilds and for all channels within, renew them channels.
-            // TODO: Do I really need to do this for all channels in this fashion, may be a more efficient way.
+            // For each of Dyno's guilds build the connected guild dictionary
             log.Info("Connected to " + _client.Guilds.Count + " guild(s).");
             foreach(SocketGuild guild in _client.Guilds)
             {
-                connectedGuilds.Append(guild.Name + ", ");
-
-                foreach (SocketVoiceChannel channel in guild.VoiceChannels)
-                {
-                    if (authGrant(channel))
-                    {
-                        Task.Run(() => channelMod.RenewAllChannels(channel)).Wait();
-                    }
-                }
+                await channelMod.UpdateGuild(guild);
             }
-
-            // Error when not connected to any guilds, derp.
-            connectedGuilds.Remove(connectedGuilds.Length - 2, 2); // Stupid way to remove comma & space...
-
-            return Task.CompletedTask;
         }
 
         // Update the list of connected guilds, used in heartbeat/logging -- may not be really needed anymore...
-        private Task UpdateGuildList(SocketGuild unused)
+        private Task JoinedGuild(SocketGuild unused)
         {
-            log.Info("Guild status updated, connected to " + _client.Guilds.Count + " guild(s).");
-            connectedGuilds.Clear();
-            foreach (SocketGuild guild in _client.Guilds)
-            {
-                connectedGuilds.Append(guild.Name + ", ");
-            }
-            connectedGuilds.Remove(connectedGuilds.Length - 2, 2);
+            log.Debug("Connected to: " + _client.Guilds);
+            return Task.CompletedTask;
+        }
+
+        private Task LeftGuild(SocketGuild guild) 
+        {
+            log.Debug("Connected to: " + _client.Guilds);
             return Task.CompletedTask;
         }
 
@@ -107,9 +92,9 @@ namespace Dynobot
         {
             log.Debug("Hit UserUpdateAsync user: " + after.Username);
             var user = after as SocketGuildUser;
-            if (user.VoiceChannel != null && authGrant(user.VoiceChannel))
+            if (user.VoiceChannel != null && AuthGrant(user.VoiceChannel))
             {
-                await channelMod.UpdateExistingChannel(user.VoiceChannel);
+                await channelMod.UpdateCurrentChannel(user.VoiceChannel);
             }
         }
 
@@ -117,7 +102,7 @@ namespace Dynobot
         private async Task UserVoiceStateUpdatedAsync(SocketUser user, SocketVoiceState before, SocketVoiceState after)
         {
             // Run renewals for both previous and new user's channels, #threadzForDayz?
-            await Task.WhenAll(checkAndUpdateAsync(after.VoiceChannel, true), checkAndUpdateAsync(before.VoiceChannel, false));
+            await Task.WhenAll(CheckAndUpdateAsync(after.VoiceChannel, true), CheckAndUpdateAsync(before.VoiceChannel, false));
         }
 
         // Logging task.
@@ -128,9 +113,9 @@ namespace Dynobot
         }
 
         //
-        private async Task checkAndUpdateAsync(SocketVoiceChannel voiceChannel, bool userJoined)
+        private async Task CheckAndUpdateAsync(SocketVoiceChannel voiceChannel, bool userJoined)
         {
-            if (voiceChannel != null && authGrant(voiceChannel))
+            if (voiceChannel != null && AuthGrant(voiceChannel))
             {
                 if  (userJoined) 
                 {
@@ -144,7 +129,7 @@ namespace Dynobot
         }
 
         // TODO: Use a method decorator instead for this?
-        private bool authGrant(SocketVoiceChannel channel)
+        private bool AuthGrant(SocketVoiceChannel channel)
         {
             // TODO: What about when someone fucks with permissions later, i.e., removes one? Fail this, I guess?
             return channel.PermissionOverwrites.ToList().Exists(x => x.TargetId == _client.CurrentUser.Id);
