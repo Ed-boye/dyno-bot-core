@@ -18,7 +18,6 @@ namespace Dynobot
     {
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(typeof(Program));
         private DiscordSocketClient _client;
-        private System.Timers.Timer _timer;
         private StringBuilder connectedGuilds;
         private ChannelMod channelMod;
 
