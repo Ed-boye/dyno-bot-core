@@ -11,6 +11,7 @@ using Discord;
 using Discord.WebSocket;
 using Dynobot.Services;
 using Dynobot.Data;
+using Dynobot.Repositories;
 
 namespace Dynobot
 {
@@ -58,7 +59,7 @@ namespace Dynobot
         // Initialize channelMod
         private Task Connected()
         {
-            channelMod = new ChannelMod(_client.CurrentUser, log);
+            channelMod = new ChannelMod(_client.CurrentUser, new GameRepository(), log);
             return Task.CompletedTask;
         }
 
@@ -67,23 +68,25 @@ namespace Dynobot
         private async Task Init()
         {
             // For each of Dyno's guilds build the connected guild dictionary
-            log.Info("Connected to " + _client.Guilds.Count + " guild(s).");
+            log.Info("Connected to " + _client.Guilds.Count + " guild(s). Running guild updates");
             foreach(SocketGuild guild in _client.Guilds)
             {
+                log.Debug("Updating guild: " + guild.Id + " - \"" + guild.Name + "\"");
                 await channelMod.UpdateGuild(guild);
             }
+            log.Info("All guilds updated.");
         }
 
         // Update the list of connected guilds, used in heartbeat/logging -- may not be really needed anymore...
         private Task JoinedGuild(SocketGuild unused)
         {
-            log.Debug("Connected to: " + _client.Guilds);
+            log.Debug("Joined a guild, Connected to: " + _client.Guilds.Count + " guild(s).");
             return Task.CompletedTask;
         }
 
         private Task LeftGuild(SocketGuild guild) 
         {
-            log.Debug("Connected to: " + _client.Guilds);
+            log.Debug("Left a guild, Connected to: " + _client.Guilds.Count + " guild(s).");
             return Task.CompletedTask;
         }
 

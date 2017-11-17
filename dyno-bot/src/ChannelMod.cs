@@ -7,6 +7,7 @@ using Discord;
 using Discord.Net;
 using Discord.WebSocket;
 using Dynobot;
+using Dynobot.Repositories;
 using log4net;
 
 namespace Dynobot.Services 
@@ -16,94 +17,94 @@ namespace Dynobot.Services
         private const string DEFAULT_DYNAMIC_CHANNEL_NAME = "Join to change name";
         private IUser dyno;
         private log4net.ILog log;
-        public ChannelMod (IUser dyno, ILog log) 
+        private GameRepository gamesRepo;
+
+        public ChannelMod (IUser dyno, GameRepository gamesRepo, ILog log) 
         {
            this.dyno = dyno;
            this.log = log;
+           this.gamesRepo = gamesRepo;
         }
 
-        // Garbage method.
-        // TODO: Sometimes the last channel that didn't get deleted that is dynamic won't get renamed
-        // This method is stupid and you wrote it like a dunce.
-        public async Task UpdateGuild(SocketGuild guild) 
+        public async Task UpdateGuild(SocketGuild guild)
         {
             var dynamicChannels = GetDynamicChannels(guild);
-            if (dynamicChannels.Count == 0)
+            
+            // Properly configured
+            if (dynamicChannels.FindAll(x => x.Users.Count >= 1).Count == dynamicChannels.Count - 1)
             {
-                log.Debug("UPDATE GUILD");
-                var newChannel = await guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
-                await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
-                log.Debug("Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
-                // Create one
+                log.Debug("Guild is good: " + guild.Name);
             }
-            else if (dynamicChannels.Count == 1 && !dynamicChannels.First().Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
+            // Not the right ratio
+            if (dynamicChannels.FindAll(x => x.Users.Count == 0).Count == 1 && dynamicChannels.Any(x => x.Users.Count >= 1))
             {
-                var channel = dynamicChannels.First();
-                if(channel.Users.Count >= 1) 
+                log.Debug("Guild channel ratio improperly configured: " + guild.Name);
+                await TryRenameChannel(dynamicChannels.FirstOrDefault(x => x.Users.Count == 0));
+            }
+            // only one with users
+            else if (dynamicChannels.Count == 1 && dynamicChannels.First().Users.Count >= 1)
+            {
+                // create a new one
+                log.Debug("Only one channel (with people) in guild: " + guild.Name);
+                await CreateChannel(guild);
+            }
+            // if none
+            else if (dynamicChannels.Count == 0)
+            {
+                // TODO: Determine if we can collapse this into above
+                // create a new one
+                log.Debug("No dynamic channels in guild: " + guild.Name);
+                await CreateChannel(guild);
+            }
+            // if all empty
+            else if (dynamicChannels.All(x => x.Users.Count == 0))
+            {
+                // delete all but one
+                log.Debug("All dynamic channels are empty in: {0}," + guild.Name + ", Deleting all but one");
+                foreach(SocketVoiceChannel channel in dynamicChannels)
                 {
-                    log.Debug("UPDATE GUILD");
-                    await UpdateSingleUserChannel(channel);
-                }
-                else if (channel.Users.Count == 0) 
-                {
-                    log.Debug("UPDATE GUILD");
-                    await channel.ModifyAsync(x => x.Name = DEFAULT_DYNAMIC_CHANNEL_NAME);
-                    log.Debug("Reverted Single Channel: " + channel.Id + " - \"" + channel.Name + "\"");
-                }
-                if(dynamicChannels.Where(x => x.Users.Count == 0).ToList().Count == 0) // Dynamic channels not at n + 1, create one.
-                {
-                    log.Debug("UPDATE GUILD");
-                    var newChannel = await guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
-                    log.Debug("Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
-                    await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
+                    if(!IsLastDynoChannel(channel))
+                    {
+                        log.Debug("Deleting Channel: " + channel.Id + " - \"" + channel.Name + "\"");
+                        await channel.DeleteAsync(); // TODO: put in helper method to add logging
+                    }
+                    else // if this is the last channel
+                    {
+                        log.Debug("Renaming (if needed): " + channel.Id + " - \"" + channel.Name + "\"");
+                        await TryRenameChannel(channel);
+                    }
                 }
             }
-            else if (dynamicChannels.Count > 1) 
+            // if all full
+            else if (dynamicChannels.All(x => x.Users.Count >= 1))
             {
-                var emptyChannels = dynamicChannels.Where(x => x.Users.Count == 0).ToList();
-                if(emptyChannels.Count == 0) // Dynamic channel not at n + 1, create one.
+                // create one
+                log.Debug("All dynamic channels are full in: " + guild.Name);
+                await CreateChannel(guild);
+            }
+            // if some full
+            else if (!dynamicChannels.All(x => x.Users.Count >= 1))
+            {
+                // delete only those needed & make sure last one is named right
+                log.Debug("Not all channels are empty: " + guild.Name + " Deleting unecessary channels");
+                var emptyChannels = dynamicChannels.Where(x => x.Users.Count == 0);
+                for (int i = 0; i < emptyChannels.Count(); i++)
                 {
-                    log.Debug("UPDATE GUILD");
-                    var newChannel = await guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
-                    log.Debug("Created New Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
-                    await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
-                }
-                else if(emptyChannels.Count == dynamicChannels.Count) // Delete all but one dynamic channel
-                {
-                    if (!emptyChannels.Last().Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
+                    if (i != emptyChannels.Count() - 1) // this isn't the last empty channel
                     {
-                        log.Debug("UPDATE GUILD");
-                        await emptyChannels.Last().ModifyAsync(x => x.Name = DEFAULT_DYNAMIC_CHANNEL_NAME);
-                        log.Debug("Reverted Single Channel: " + emptyChannels.Last().Id + " - \"" + emptyChannels.Last().Name + "\"");
-                        // TODO: Don't be lazy, wrap your modify etc to also log, probably
+                        await emptyChannels.ElementAt(i).DeleteAsync();
                     }
-                    foreach(SocketVoiceChannel channel in dynamicChannels.Take(dynamicChannels.Count - 1))
+                    else //is is last channel
                     {
-                        log.Debug("UPDATE GUILD");
-                        await channel.DeleteAsync();
-                        log.Debug("Deleted Empty Channel: " + channel.Id + " - \"" + channel.Name + "\"");
-                    }
-                }
-                else // Remove channels so n + 1 remain where n is the number dynamic channels with users in them.
-                {
-                    if (!dynamicChannels.Last().Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
-                    {
-                        log.Debug("UPDATE GUILD");
-                        await dynamicChannels.Last().ModifyAsync(x => x.Name = DEFAULT_DYNAMIC_CHANNEL_NAME);
-                        log.Debug("Reverted Single Channel: " + dynamicChannels.Last().Id + " - \"" + dynamicChannels.Last().Name + "\"");
-                        // TODO: Don't be lazy, wrap your modify etc to also log, probably
-                    }
-                    foreach(SocketVoiceChannel channel in dynamicChannels
-                        .Where(x => x.Users.Count == 0)
-                        .Take(emptyChannels.Count - 1))
-                    {
-                        log.Debug("UPDATE GUILD");
-                        await channel.DeleteAsync();
-                        log.Debug("Deleted Empty Channel: " + channel.Id + " - \"" + channel.Name + "\"");
+                        var lastEmptyChannel = emptyChannels.ElementAt(i);
+                        log.Debug("Renaming (if needed): " + lastEmptyChannel.Id + " - \"" + lastEmptyChannel.Name + "\"");
+                        await TryRenameChannel(lastEmptyChannel);
                     }
                 }
             }
         }
+
+        #region Channel Modifiers
 
         public async Task UpdateOldChannel(SocketVoiceChannel channel) 
         {
@@ -222,6 +223,10 @@ namespace Dynobot.Services
             }
         }
 
+        #endregion
+
+        #region Helper Methods
+
         // Try to find the top game, return null if no games exist in channel or no majority game
         private Game? TryGetTopGameInChannel(SocketVoiceChannel channel) 
         {
@@ -312,5 +317,30 @@ namespace Dynobot.Services
             // voiceChannel.GetPermissionOverwrite(dyno);
             return voiceChannel.PermissionOverwrites.ToList().Exists(x => x.TargetId == dyno.Id);
         }
+
+        private async Task<bool> TryRenameChannel (SocketVoiceChannel voiceChannel)
+        {
+            if (!voiceChannel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
+            {
+                string oldName = voiceChannel.Name;
+                await voiceChannel.ModifyAsync(x => x.Name = DEFAULT_DYNAMIC_CHANNEL_NAME);
+                log.Debug("Reverted Channel: " + voiceChannel.Id + " - \"" + oldName + "\"");
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        private async Task CreateChannel(SocketGuild guild)
+        {
+            // TODO: If no permissions exist?
+            var newChannel = await guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
+            await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
+            log.Debug("Created Channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
+        }
+
+        #endregion
     }
 }
