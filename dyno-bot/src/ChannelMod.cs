@@ -269,7 +269,7 @@ namespace Dynobot.Services
                 }
                 else 
                 {
-                    topGame = list.ElementAt(0).Key;
+                    topGame = list.ElementAt(list.Count - 1).Key;
                 }
             }
             return topGame;
