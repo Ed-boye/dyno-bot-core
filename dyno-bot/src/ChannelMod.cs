@@ -77,8 +77,7 @@ namespace Dynobot.Services
                 log.Debug("UPDATE NEW");
                 await UpdateSingleUserChannel(channel);
                 
-                // Newly joined channel (one user), create a new channel
-                //await CreateChannel(channel.Guild);
+                // Newly joined channel (one user), create a new channel if needed
                 if(GetDynamicChannels(channel.Guild).FindAll(x => x.Users.Count == 0).Count != 1) 
                 {
                     await CreateChannel(channel.Guild);
@@ -149,8 +148,7 @@ namespace Dynobot.Services
             else // no game being played
             {
                 log.Debug("NOT Modifying Channel: " + channel.Id + " - \"" + channel.Name + "\"");
-                //await channel.ModifyAsync(x => x.Name = "Join to Change");
-                //Don't rename, someone already changed it or is already set to default
+                // Don't rename, someone already changed it or is already set to default
             }
         }
 
