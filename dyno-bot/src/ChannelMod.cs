@@ -30,77 +30,18 @@ namespace Dynobot.Services
         {
             var dynamicChannels = GetDynamicChannels(guild);
             
-            // Properly configured
+            // Proper ratio
             if (dynamicChannels.FindAll(x => x.Users.Count >= 1).Count == dynamicChannels.Count - 1)
             {
-                log.Debug("Guild is good: " + guild.Name);
-            }
-            // Not the right ratio
-            if (dynamicChannels.FindAll(x => x.Users.Count == 0).Count == 1 && dynamicChannels.Any(x => x.Users.Count >= 1))
-            {
-                log.Debug("Guild channel ratio improperly configured: " + guild.Name);
-                await TryRenameChannel(dynamicChannels.FirstOrDefault(x => x.Users.Count == 0));
-            }
-            // only one with users
-            else if (dynamicChannels.Count == 1 && dynamicChannels.First().Users.Count >= 1)
-            {
-                // create a new one
-                log.Debug("Only one channel (with people) in guild: " + guild.Name);
-                await CreateChannel(guild);
-            }
-            // if none
-            else if (dynamicChannels.Count == 0)
-            {
-                // TODO: Determine if we can collapse this into above
-                // create a new one
-                log.Debug("No dynamic channels in guild: " + guild.Name);
-                await CreateChannel(guild);
-            }
-            // if all empty
-            else if (dynamicChannels.All(x => x.Users.Count == 0))
-            {
-                // delete all but one
-                log.Debug("All dynamic channels are empty in: {0}," + guild.Name + ", Deleting all but one");
-                foreach(SocketVoiceChannel channel in dynamicChannels)
+                foreach(var channel in dynamicChannels) 
                 {
-                    if(!IsLastDynoChannel(channel))
-                    {
-                        log.Debug("Deleting Channel: " + channel.Id + " - \"" + channel.Name + "\"");
-                        await channel.DeleteAsync(); // TODO: put in helper method to add logging
-                    }
-                    else // if this is the last channel
-                    {
-                        log.Debug("Renaming (if needed): " + channel.Id + " - \"" + channel.Name + "\"");
-                        await TryRenameChannel(channel);
-                    }
+                    await TryRenameChannel(channel);
                 }
             }
-            // if all full
-            else if (dynamicChannels.All(x => x.Users.Count >= 1))
+            // Ratio is off 
+            else if (dynamicChannels.FindAll(x => x.Users.Count == 0).Count != 1)
             {
-                // create one
-                log.Debug("All dynamic channels are full in: " + guild.Name);
-                await CreateChannel(guild);
-            }
-            // if some full
-            else if (!dynamicChannels.All(x => x.Users.Count >= 1))
-            {
-                // delete only those needed & make sure last one is named right
-                log.Debug("Not all channels are empty: " + guild.Name + " Deleting unecessary channels");
-                var emptyChannels = dynamicChannels.Where(x => x.Users.Count == 0);
-                for (int i = 0; i < emptyChannels.Count(); i++)
-                {
-                    if (i != emptyChannels.Count() - 1) // this isn't the last empty channel
-                    {
-                        await emptyChannels.ElementAt(i).DeleteAsync();
-                    }
-                    else //is is last channel
-                    {
-                        var lastEmptyChannel = emptyChannels.ElementAt(i);
-                        log.Debug("Renaming (if needed): " + lastEmptyChannel.Id + " - \"" + lastEmptyChannel.Name + "\"");
-                        await TryRenameChannel(lastEmptyChannel);
-                    }
-                }
+                await TryFixRatio(guild);
             }
         }
 
@@ -108,10 +49,10 @@ namespace Dynobot.Services
 
         public async Task UpdateOldChannel(SocketVoiceChannel channel) 
         {
-            if (channel.Users.Count == 0)
+            if (channel.Users.Count == 0 && !channel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
             {
                 log.Debug("UPDATE OLD");
-                await RevertOrDelete(channel);
+                await TryFixRatio(channel.Guild);
             }
             else if (channel.Users.Count == 1)
             {
@@ -137,8 +78,13 @@ namespace Dynobot.Services
                 await UpdateSingleUserChannel(channel);
                 
                 // Newly joined channel (one user), create a new channel
-                var newChannel = await channel.Guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
-                await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
+                //await CreateChannel(channel.Guild);
+                if(GetDynamicChannels(channel.Guild).FindAll(x => x.Users.Count == 0).Count != 1) 
+                {
+                    await CreateChannel(channel.Guild);
+                }
+                //await TryFixRatio(channel.Guild);
+
             }
             else //(channel.Users.Count > 1)
             {
@@ -195,7 +141,7 @@ namespace Dynobot.Services
         private async Task UpdateToTopGame(SocketVoiceChannel channel)
         {
             Game? topGame = TryGetTopGameInChannel(channel);
-            if (topGame != null) 
+            if (topGame != null && !channel.Name.Equals(topGame.Value.Name)) 
             {
                 await channel.ModifyAsync(x => x.Name = topGame.Value.Name);
                 log.Debug("Renamed Channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + topGame.Value.Name + "\"");
@@ -205,21 +151,6 @@ namespace Dynobot.Services
                 log.Debug("NOT Modifying Channel: " + channel.Id + " - \"" + channel.Name + "\"");
                 //await channel.ModifyAsync(x => x.Name = "Join to Change");
                 //Don't rename, someone already changed it or is already set to default
-            }
-        }
-
-        private async Task RevertOrDelete(SocketVoiceChannel channel) 
-        {
-            if(!IsLastDynoChannel(channel))
-            {
-                await channel.DeleteAsync();
-                log.Debug("Deleted Empty Channel: " + channel.Id + " - \"" + channel.Name + "\"");
-            }
-            else 
-            {
-                // TODO: Don't revert if not needed?
-                await channel.ModifyAsync(x => x.Name = DEFAULT_DYNAMIC_CHANNEL_NAME);
-                log.Debug("Reverted final dynamic Channel: " + channel.Id + " - \"" + channel.Name + "\"");
             }
         }
 
@@ -275,29 +206,6 @@ namespace Dynobot.Services
             return topGame;
         }
 
-        // Check to see if only one dynamic channel exists
-        // TODO: Save this in a DB instead? Always updated state needed then...
-        private bool IsLastDynoChannel(SocketVoiceChannel channel) 
-        {
-            // TODO turn this into a linq expression, probably...
-            int dynamicChannels = 0;
-            foreach(SocketVoiceChannel voiceChannel in channel.Guild.VoiceChannels) 
-            {
-                if(IsDynamicChannel(voiceChannel))
-                {
-                    dynamicChannels++;
-                }
-            }
-            if (dynamicChannels > 1)
-            {
-                return false;
-            }
-            else 
-            {
-                return true;
-            }
-        }
-
         private List<SocketVoiceChannel> GetDynamicChannels(SocketGuild guild) 
         {
             List<SocketVoiceChannel> dynoChannels = new List<SocketVoiceChannel>();
@@ -320,16 +228,57 @@ namespace Dynobot.Services
 
         private async Task<bool> TryRenameChannel (SocketVoiceChannel voiceChannel)
         {
-            if (!voiceChannel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
+            if (voiceChannel.Users.Count == 0 && !voiceChannel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
             {
                 string oldName = voiceChannel.Name;
                 await voiceChannel.ModifyAsync(x => x.Name = DEFAULT_DYNAMIC_CHANNEL_NAME);
                 log.Debug("Reverted Channel: " + voiceChannel.Id + " - \"" + oldName + "\"");
                 return true;
             }
+            else if(voiceChannel.Users.Count >= 1) 
+            {
+                await UpdateToTopGame(voiceChannel);
+                return true;
+            }
             else
             {
                 return false;
+            }
+        }
+
+        private async Task TryFixRatio(SocketGuild guild)
+        {
+            var dynamicChannels = GetDynamicChannels(guild);
+            // More than one empty channel
+            if (dynamicChannels.FindAll(x => x.Users.Count == 0).Count > 1)
+            {
+                var emptyChannels = dynamicChannels.Where(x => x.Users.Count == 0).ToList();
+                var keepChannels = dynamicChannels.Where(x => x.Users.Count >= 1).ToList();
+                keepChannels.Add(emptyChannels.ElementAt(0));
+                emptyChannels.RemoveAt(0);
+                
+                foreach(var channel in emptyChannels)
+                {
+                    await channel.DeleteAsync();
+                }
+                
+                foreach(var channel in keepChannels)
+                {
+                    await TryRenameChannel(channel);
+                }
+            }
+            // No empty channels
+            else if (dynamicChannels.FindAll(x => x.Users.Count == 0).Count < 1)
+            {
+                await CreateChannel(guild);
+            }
+            // Ratio is correct
+            else 
+            {
+                foreach(var channel in dynamicChannels.FindAll(x => x.Users.Count == 0))
+                {
+                    await TryRenameChannel(channel);
+                }
             }
         }
 
