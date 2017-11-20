@@ -77,7 +77,6 @@ namespace Dynobot
             log.Info("All guilds updated.");
         }
 
-        // Update the list of connected guilds, used in heartbeat/logging -- may not be really needed anymore...
         private Task JoinedGuild(SocketGuild unused)
         {
             log.Debug("Joined a guild, Connected to: " + _client.Guilds.Count + " guild(s).");
@@ -97,7 +96,7 @@ namespace Dynobot
             var user = after as SocketGuildUser;
             if (user.VoiceChannel != null && AuthGrant(user.VoiceChannel))
             {
-                await channelMod.UpdateCurrentChannel(user.VoiceChannel);
+                await channelMod.UpdateCurrentDynamicChannel(user.VoiceChannel);
             }
         }
 
@@ -122,11 +121,11 @@ namespace Dynobot
             {
                 if  (userJoined) 
                 {
-                    await channelMod.UpdateNewChannel(voiceChannel);
+                    await channelMod.UpdateNewDynamicChannel(voiceChannel);
                 }
                 else 
                 {
-                    await channelMod.UpdateOldChannel(voiceChannel);
+                    await channelMod.UpdateOldDynamicChannel(voiceChannel);
                 }
             }
         }

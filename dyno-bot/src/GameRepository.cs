@@ -7,6 +7,7 @@ namespace Dynobot.Repositories
         private Dictionary<string, string> gamesTable;
         public GameRepository() 
         {
+            // TODO: At least get from file.
             gamesTable = new Dictionary<string, string>
             {
                 { "PLAYERUNKNOWN'S BATTLEGROUNDS", "PUBG" },
