@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -62,11 +61,6 @@ namespace Dynobot.Services
             {
                 await TryUpdateToTopGame(channel);
             }
-            // If no empty dynamic channels after leaving, create one
-            /*if(GetDynamicChannels(channel.Guild).FindAll(x => x.Users.Count == 0).Count != 1) 
-            {
-                await CreateChannel(channel.Guild);
-            }*/
         }
 
         public async Task UpdateNewDynamicChannel (SocketVoiceChannel channel)
@@ -113,30 +107,19 @@ namespace Dynobot.Services
 
         #region Helper Methods
 
-        private async Task UpdateSingleUserChannel(SocketVoiceChannel channel)
+        private async Task UpdateSingleUserChannel(SocketVoiceChannel voiceChannel)
         {
-            if (channel.Users.First().Game != null)
+            if (voiceChannel.Users.First().Game != null)
             {
                 // Set name to user's game
-                string gameName = gamesRepo.GetFriendlyName(channel.Users.First().Game.Value.Name);
-                await channel.ModifyAsync(x => x.Name = gameName);
-                log.Debug("Renamed channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + gameName + "\"");
+                string gameName = gamesRepo.GetFriendlyName(voiceChannel.Users.First().Game.Value.Name);
+                await voiceChannel.ModifyAsync(x => x.Name = gameName);
+                log.Debug("Renamed channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\" to \"" + gameName + "\"");
             }
             else
             {
-                // Set name to user's name
-                SocketGuildUser user = channel.Users.First();
-                string userChannelName;
-                if(user.Nickname != null) 
-                {
-                    userChannelName = user.Nickname + "'s Domain";
-                }
-                else
-                {
-                    userChannelName = user.Username + "'s Domain";
-                }
-                await channel.ModifyAsync(x => x.Name = userChannelName);
-                log.Debug("Renamed channel: " + channel.Id + " - \"" + channel.Name + "\" to \"" + userChannelName + "\"");
+                var user = voiceChannel.Users.First();
+                await TryRenameVoiceChannelToUser(voiceChannel, user);
             }
         }
 
@@ -149,9 +132,22 @@ namespace Dynobot.Services
                 log.Debug("Reverted channel: " + voiceChannel.Id + " - \"" + oldName + "\"");
                 return true;
             }
+            else if (voiceChannel.Users.Count == 1)
+            {
+                await TryRenameVoiceChannelToUser(voiceChannel, voiceChannel.Users.First());
+                return true;
+            }
             else if(voiceChannel.Users.Count >= 1) 
             {
-                await TryUpdateToTopGame(voiceChannel);
+                if(!await TryUpdateToTopGame(voiceChannel))
+                {
+                    // If no top game was updated, then just default to the first user's name, whatever.
+                    // TODO: Currently changing the channels name even if a game was previously being played.
+                    // If channel contains name of something currently being played.
+                    var user = voiceChannel.Users.First();
+                    log.Debug("No top game in channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\"");
+                    await TryRenameVoiceChannelToUser(voiceChannel, user);
+                };
                 return true;
             }
             else
@@ -163,17 +159,15 @@ namespace Dynobot.Services
         private async Task<bool> TryUpdateToTopGame(SocketVoiceChannel channel)
         {
             var topGame = TryGetTopGameInChannel(channel);
-            string topGameName = gamesRepo.GetFriendlyName(topGame.Value.Name);
-            if (topGame != null && (!channel.Name.Equals(topGame.Value.Name) || !channel.Name.Equals(topGameName))) 
+            if (topGame != null && (!channel.Name.Equals(topGame.Value.Name) || !channel.Name.Equals(gamesRepo.GetFriendlyName(topGame.Value.Name)))) 
             {
                 var oldChannelName = channel.Name;
-                await channel.ModifyAsync(x => x.Name = topGameName);
-                log.Debug("Renamed channel: " + channel.Id + " - \"" + oldChannelName + "\" to \"" + channel.Name + "\"");
+                await channel.ModifyAsync(x => x.Name = gamesRepo.GetFriendlyName(topGame.Value.Name));
+                log.Debug("TryUpdateToTopGame -> Renamed channel: " + channel.Id + " - \"" + oldChannelName + "\" to \"" + channel.Name + "\"");
                 return true;
             }
             else // Already top game set or game not being played.
             {
-                log.Debug("No game being played; not modifying channel: " + channel.Id + " - \"" + channel.Name + "\"");
                 return false;
             }
         }
@@ -281,6 +275,24 @@ namespace Dynobot.Services
             var newChannel = await guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
             await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
             log.Debug("Created channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
+        }
+
+        private async Task<bool> TryRenameVoiceChannelToUser(SocketVoiceChannel voiceChannel, SocketGuildUser user)
+        {
+            if(user.Nickname != null && !voiceChannel.Name.Contains(user.Nickname))
+            {
+                await voiceChannel.ModifyAsync(x => x.Name = user.Nickname + "'s Domain");
+                log.Debug("Renamed channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\" to \"" + user.Nickname + "'s Domain\"");
+                return true;
+            }
+            else if (!voiceChannel.Name.Contains(user.Username))
+            {
+                await voiceChannel.ModifyAsync(x => x.Name = user.Username + "'s Domain");
+                log.Debug("Renamed channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\" to \"" + user.Username + "'s Domain\"");
+                return true;
+            }
+
+            return false;
         }
 
         #endregion
