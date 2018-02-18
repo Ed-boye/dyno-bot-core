@@ -132,11 +132,11 @@ namespace Dynobot.Services
                 log.Debug("Reverted channel: " + voiceChannel.Id + " - \"" + oldName + "\"");
                 return true;
             }
-            else if (voiceChannel.Users.Count == 1)
+            /*else if (voiceChannel.Users.Count == 1)
             {
                 await TryRenameVoiceChannelToUser(voiceChannel, voiceChannel.Users.First());
                 return true;
-            }
+            }*/
             else if(voiceChannel.Users.Count >= 1) 
             {
                 if(!await TryUpdateToTopGame(voiceChannel))
@@ -279,7 +279,8 @@ namespace Dynobot.Services
 
         private async Task<bool> TryRenameVoiceChannelToUser(SocketVoiceChannel voiceChannel, SocketGuildUser user)
         {
-            if(user.Nickname != null && !voiceChannel.Name.Contains(user.Nickname))
+            // TODO: This is probably garbage way
+            if(user.Nickname != null && (!voiceChannel.Name.Contains(user.Nickname) || !voiceChannel.Name.Contains(user.Username)))
             {
                 await voiceChannel.ModifyAsync(x => x.Name = user.Nickname + "'s Domain");
                 log.Debug("Renamed channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\" to \"" + user.Nickname + "'s Domain\"");

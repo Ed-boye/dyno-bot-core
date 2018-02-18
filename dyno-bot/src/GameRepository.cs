@@ -11,7 +11,10 @@ namespace Dynobot.Repositories
             gamesTable = new Dictionary<string, string>
             {
                 { "PLAYERUNKNOWN'S BATTLEGROUNDS", "PUBG" },
-                { "Counter-Strike Global Offensive", "CS:GO" }
+                { "Counter-Strike Global Offensive", "CS:GO" },
+                { "Tom Clancy's Rainbow Six Siege", "R6 Siege" },
+                { "Leage of Legends", "LoL"},
+                { "Spotify", "Jammin' Out"}
             };
         }
 
