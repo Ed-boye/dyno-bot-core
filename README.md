@@ -1,8 +1,3 @@
-```diff
-- Dyno is not yet deployed utilizng this version; auto add/remove is not live.
-- These instructions do not (fully) apply to the current version out there.
-```
-
 # Dyno Bot
 A dynamic channel creator for Discord (now in .NET Core)
 
