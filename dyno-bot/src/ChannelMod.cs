@@ -59,7 +59,7 @@ namespace Dynobot.Services
             }
             else //(channel.Users.Count > 1)
             {
-                await TryUpdateToTopGame(channel);
+                await TryRenameChannel(channel);
             }
         }
 
@@ -77,7 +77,7 @@ namespace Dynobot.Services
             else //(channel.Users.Count > 1)
             {
                 // Newly joined channel has users in it
-                await TryUpdateToTopGame(channel);
+                await TryRenameChannel(channel);
             }
             
             // If no empty dynamic channels exist after joining, create one
@@ -99,7 +99,7 @@ namespace Dynobot.Services
             }
             else //(channel.Users.Count > 1)
             {
-                await TryUpdateToTopGame(channel);
+                await TryRenameChannel(channel); //TODO: TryRename...?
             }
         }
 

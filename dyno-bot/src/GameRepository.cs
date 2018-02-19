@@ -14,7 +14,7 @@ namespace Dynobot.Repositories
                 { "Counter-Strike Global Offensive", "CS:GO" },
                 { "Tom Clancy's Rainbow Six Siege", "R6 Siege" },
                 { "Leage of Legends", "LoL"},
-                { "Spotify", "Jammin' Out"}
+                { "Spotify", "Listening to Music"}
             };
         }
 
