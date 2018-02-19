@@ -7,7 +7,7 @@ Dyno will rename a voice channel you determine as dynamic (via Dyno's role) to t
 
 ## Quick Start
 
-1. [Add Dyno](https://discordapp.com/api/oauth2/authorize?client_id=373286855023656962&scope=bot&permissions=268435472) to one of your servers
+1. [Add Dyno](https://discordapp.com/api/oauth2/authorize?client_id=379109864548335620&scope=bot&permissions=268435472) (in Beta) to one of your servers
 2. Now add Dyno (the "MEMBER") as a role to a channel (and only one channel) you'd like to make dynamic
     * Cog --> Permissions --> ROLES/MEMBERS (+) --> Dyno
     * Remember, the Dyno under "MEMBERS" not "ROLES"; if you fuck this up, it's on you
