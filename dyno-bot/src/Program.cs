@@ -54,6 +54,7 @@ namespace Dynobot
 
             // Block this task until the program is closed.
             await Task.Delay(-1);
+            log.Fatal("Program has termianted.");
         }
 
         // Initialize channelMod
@@ -77,15 +78,22 @@ namespace Dynobot
             log.Info("All guilds updated.");
         }
 
-        private Task JoinedGuild(SocketGuild unused)
+        // Logging task.
+        private Task Log(LogMessage msg)
         {
-            log.Debug("Joined a guild, Connected to: " + _client.Guilds.Count + " guild(s).");
+            log.Info(msg.ToString());
+            return Task.CompletedTask;
+        }
+
+        private Task JoinedGuild(SocketGuild guild)
+        {
+            log.Info("Joined guild: \"" + guild.Name + ":" + guild.Id + "\". Connected to: " + _client.Guilds.Count + " guild(s).");
             return Task.CompletedTask;
         }
 
         private Task LeftGuild(SocketGuild guild) 
         {
-            log.Debug("Left a guild, Connected to: " + _client.Guilds.Count + " guild(s).");
+            log.Info("Left a guild \"" + guild.Name + ":" + guild.Id + "\". Connected to: " + _client.Guilds.Count + " guild(s).");
             return Task.CompletedTask;
         }
 
@@ -96,6 +104,7 @@ namespace Dynobot
             var user = after as SocketGuildUser;
             if (user.VoiceChannel != null && AuthGrant(user.VoiceChannel))
             {
+                log.Debug("Attempting to update user:" + user.Username + ". Current Dynamic Channel: " + user.VoiceChannel.Name);
                 await channelMod.UpdateCurrentDynamicChannel(user.VoiceChannel);
             }
         }
@@ -105,13 +114,6 @@ namespace Dynobot
         {
             // Run renewals for both previous and new user's channels, #threadzForDayz?
             await Task.WhenAll(CheckAndUpdateAsync(after.VoiceChannel, true), CheckAndUpdateAsync(before.VoiceChannel, false));
-        }
-
-        // Logging task.
-        private Task Log(LogMessage msg)
-        {
-            log.Info(msg.ToString());
-            return Task.CompletedTask;
         }
 
         //

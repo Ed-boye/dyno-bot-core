@@ -68,6 +68,7 @@ namespace Dynobot.Services
             if (channel.Users.Count == 0)
             {
                 // Shouldn't really hit this ever if called right
+                log.Warn("Trying to update a channel with zero users when updating a newly joined dynamic channel: " + channel.Name);
             }
             else if (channel.Users.Count == 1)
             {
@@ -92,6 +93,7 @@ namespace Dynobot.Services
             if (channel.Users.Count == 0)
             {
                 // Shouldn't hit this
+                log.Warn("Trying to update a channel with zero users when updating a current dynamic channel: " + channel.Name);
             }
             else if (channel.Users.Count == 1)
             {
@@ -163,7 +165,6 @@ namespace Dynobot.Services
             {
                 var oldChannelName = channel.Name;
                 await channel.ModifyAsync(x => x.Name = gamesRepo.GetFriendlyName(topGame.Value.Name));
-                log.Debug("TryUpdateToTopGame -> Renamed channel: " + channel.Id + " - \"" + oldChannelName + "\" to \"" + channel.Name + "\"");
                 return true;
             }
             else // Already top game set or game not being played.
