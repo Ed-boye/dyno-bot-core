@@ -105,7 +105,8 @@ namespace Dynobot
             if (user.VoiceChannel != null && AuthGrant(user.VoiceChannel))
             {
                 log.Debug("Attempting to update user:" + user.Username + ". Current Dynamic Channel: " + user.VoiceChannel.Name);
-                await channelMod.UpdateCurrentDynamicChannel(user.VoiceChannel);
+                await channelMod.UpdateUserDynamicChannel(user);
+                // If multiple people in channel, this will change the channel name to that of the user who last played a game
             }
         }
 

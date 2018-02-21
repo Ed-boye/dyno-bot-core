@@ -88,20 +88,23 @@ namespace Dynobot.Services
             }
         }
 
-        public async Task UpdateCurrentDynamicChannel (SocketVoiceChannel channel) 
+        public async Task UpdateUserDynamicChannel (SocketGuildUser user) 
         {
-            if (channel.Users.Count == 0)
+            if (user.VoiceChannel.Users.Count == 0)
             {
                 // Shouldn't hit this
-                log.Warn("Trying to update a channel with zero users when updating a current dynamic channel: " + channel.Name);
+                log.Warn("Trying to update a channel with zero users when updating a current dynamic channel: " + user.VoiceChannel.Name);
             }
-            else if (channel.Users.Count == 1)
+            else if (user.VoiceChannel.Users.Count == 1)
             {
-                await UpdateSingleUserChannel(channel);
+                await UpdateSingleUserChannel(user.VoiceChannel);
             }
             else //(channel.Users.Count > 1)
             {
-                await TryRenameChannel(channel); //TODO: TryRename...?
+                if (!await TryUpdateToTopGame(user.VoiceChannel))
+                {
+                    await TryRenameVoiceChannelToUser(user.VoiceChannel, user);
+                }
             }
         }
 
@@ -134,23 +137,21 @@ namespace Dynobot.Services
                 log.Debug("Reverted channel: " + voiceChannel.Id + " - \"" + oldName + "\"");
                 return true;
             }
-            /*else if (voiceChannel.Users.Count == 1)
+            else if (voiceChannel.Users.Count == 1)
             {
-                await TryRenameVoiceChannelToUser(voiceChannel, voiceChannel.Users.First());
-                return true;
-                // TODO: Determine if I really need this block otherwise refactor.
-            }*/
-            else if(voiceChannel.Users.Count >= 1)
-            {
-                if(!await TryUpdateToTopGame(voiceChannel) && !voiceChannel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
+                if(!await TryUpdateToTopGame(voiceChannel))
                 {
-                    // If no top game was updated, then just default to the first user's name, whatever.y
-                    // TODO: Currently changing the channels name even if a game was previously being played.
-                    // If channel contains name of something currently being played.
-                    var user = voiceChannel.Users.First();
-                    log.Debug("No top game in channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\"");
-                    await TryRenameVoiceChannelToUser(voiceChannel, user);
-                };
+                    await TryRenameVoiceChannelToUser(voiceChannel, voiceChannel.Users.First());
+                }
+                return true;
+            }
+            else if(!await TryUpdateToTopGame(voiceChannel)
+                && !voiceChannel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME)
+                && voiceChannel.Users.Any(x => voiceChannel.Name.Contains(x.Username) || voiceChannel.Name.Contains(x.Nickname)))
+            {
+                var user = voiceChannel.Users.First();
+                log.Debug("No top game in channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\"");
+                await TryRenameVoiceChannelToUser(voiceChannel, user);
                 return true;
             }
             else
@@ -222,7 +223,7 @@ namespace Dynobot.Services
         {
             var gamesDict = new Dictionary<Game?, int>();
             Game? topGame = null;
-
+            // TODO: Optimize for one user, perhaps
             foreach (SocketGuildUser person in channel.Users)
             {
                 if (person.Game != null)
