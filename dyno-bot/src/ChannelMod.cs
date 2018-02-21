@@ -138,12 +138,13 @@ namespace Dynobot.Services
             {
                 await TryRenameVoiceChannelToUser(voiceChannel, voiceChannel.Users.First());
                 return true;
+                // TODO: Determine if I really need this block otherwise refactor.
             }*/
-            else if(voiceChannel.Users.Count >= 1) 
+            else if(voiceChannel.Users.Count >= 1)
             {
-                if(!await TryUpdateToTopGame(voiceChannel))
+                if(!await TryUpdateToTopGame(voiceChannel) && !voiceChannel.Name.Equals(DEFAULT_DYNAMIC_CHANNEL_NAME))
                 {
-                    // If no top game was updated, then just default to the first user's name, whatever.
+                    // If no top game was updated, then just default to the first user's name, whatever.y
                     // TODO: Currently changing the channels name even if a game was previously being played.
                     // If channel contains name of something currently being played.
                     var user = voiceChannel.Users.First();
