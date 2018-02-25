@@ -84,7 +84,7 @@ namespace Dynobot.Services
             // If no empty dynamic channels exist after joining, create one
             if(GetDynamicChannels(channel.Guild).FindAll(x => x.Users.Count == 0).Count == 0) 
             {
-                await CreateChannel(channel.Guild);
+                await CreateChannel(channel.Guild, channel.CategoryId); //With same categoryId
             }
         }
 
@@ -114,10 +114,10 @@ namespace Dynobot.Services
 
         private async Task UpdateSingleUserChannel(SocketVoiceChannel voiceChannel)
         {
-            if (voiceChannel.Users.First().Game != null)
+            if (voiceChannel.Users.First().Activity.Name != null)
             {
                 // Set name to user's game
-                string gameName = gamesRepo.GetFriendlyName(voiceChannel.Users.First().Game.Value.Name);
+                string gameName = gamesRepo.GetFriendlyName(voiceChannel.Users.First().Activity.Name);
                 await voiceChannel.ModifyAsync(x => x.Name = gameName);
                 log.Debug("Renamed channel: " + voiceChannel.Id + " - \"" + voiceChannel.Name + "\" to \"" + gameName + "\"");
             }
@@ -163,10 +163,10 @@ namespace Dynobot.Services
         private async Task<bool> TryUpdateToTopGame(SocketVoiceChannel channel)
         {
             var topGame = TryGetTopGameInChannel(channel);
-            if (topGame != null && (!channel.Name.Equals(topGame.Value.Name) || !channel.Name.Equals(gamesRepo.GetFriendlyName(topGame.Value.Name)))) 
+            if (topGame != null && (!channel.Name.Equals(topGame.Name) || !channel.Name.Equals(gamesRepo.GetFriendlyName(topGame.Name)))) 
             {
                 var oldChannelName = channel.Name;
-                await channel.ModifyAsync(x => x.Name = gamesRepo.GetFriendlyName(topGame.Value.Name));
+                await channel.ModifyAsync(x => x.Name = gamesRepo.GetFriendlyName(topGame.Name));
                 return true;
             }
             else // Already top game set or game not being played.
@@ -206,7 +206,7 @@ namespace Dynobot.Services
             // No empty channels
             else if (dynamicChannels.FindAll(x => x.Users.Count == 0).Count < 1)
             {
-                await CreateChannel(guild);
+                await CreateChannel(guild, null);
             }
             // Ratio is correct
             else 
@@ -219,16 +219,16 @@ namespace Dynobot.Services
         }
 
         // Try to find the top game, return null if no games exist in channel or no majority game
-        private Game? TryGetTopGameInChannel(SocketVoiceChannel channel) 
+        private IActivity TryGetTopGameInChannel(SocketVoiceChannel channel) 
         {
-            var gamesDict = new Dictionary<Game?, int>();
-            Game? topGame = null;
+            var gamesDict = new Dictionary<IActivity, int>();
+            IActivity topGame = null;
             // TODO: Optimize for one user, perhaps
             foreach (SocketGuildUser person in channel.Users)
             {
-                if (person.Game != null)
+                if (person.Activity != null)
                 {
-                    Game? game = person.Game;
+                    IActivity game = person.Activity;
                     int count;
                     if (gamesDict.TryGetValue(game, out count))
                     {
@@ -273,10 +273,15 @@ namespace Dynobot.Services
                 .Exists(y => y.TargetId == dyno.Id));
         }
 
-        private async Task CreateChannel(SocketGuild guild)
+        private async Task CreateChannel(SocketGuild guild, ulong? categoryId)
         {
             var newChannel = await guild.CreateVoiceChannelAsync(DEFAULT_DYNAMIC_CHANNEL_NAME);
             await newChannel.AddPermissionOverwriteAsync(dyno, new Discord.OverwritePermissions());
+            await newChannel.ModifyAsync(x => 
+                {
+                    x.CategoryId = categoryId;
+                    x.Position = 0;
+                });
             log.Debug("Created channel: " + newChannel.Id + " - \"" + newChannel.Name + "\"");
         }
 
