@@ -100,7 +100,8 @@ namespace Dynobot
         // Run renewal when a user's status changes, i.e., game is launched or termianted
         private async Task UserUpdatedAsync(SocketUser before, SocketUser after)
         {
-            log.Debug("Hit UserUpdateAsync user: " + after.Username);
+            log.Debug("User (" + after.Username + ") updated. Before (" + 
+                before.Activity + "), after: (" + after.Activity + ")");
             var user = after as SocketGuildUser;
             if (user.VoiceChannel != null && AuthGrant(user.VoiceChannel))
             {
@@ -114,6 +115,24 @@ namespace Dynobot
         private async Task UserVoiceStateUpdatedAsync(SocketUser user, SocketVoiceState before, SocketVoiceState after)
         {
             // Run renewals for both previous and new user's channels, #threadzForDayz?
+            if(before.VoiceChannel != null && after.VoiceChannel != null)
+            {
+                log.Debug("User (" + user.Username + ") voice state changed: (" + 
+                before.VoiceChannel + ":" + before.VoiceChannel.Id + ")-->(" + 
+                after.VoiceChannel + ":" + after.VoiceChannel.Id + ")");
+            }
+            else if(before.VoiceChannel != null)
+            {
+                log.Debug("User (" + user.Username + ") voice state changed: (" + 
+                before.VoiceChannel + ":" + before.VoiceChannel.Id + ")-->(" + 
+                after.VoiceChannel + ")");
+            }
+            else //(after.VoiceChannel != null)
+            {
+                log.Debug("User (" + user.Username + ") voice state changed: (" + 
+                before.VoiceChannel + ")-->(" + 
+                after.VoiceChannel + ":" + after.VoiceChannel.Id + ")");
+            }
             await Task.WhenAll(CheckAndUpdateAsync(after.VoiceChannel, true), CheckAndUpdateAsync(before.VoiceChannel, false));
         }
 
