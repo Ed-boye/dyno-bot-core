@@ -163,10 +163,10 @@ namespace Dynobot.Services
         private async Task<bool> TryUpdateToTopGame(SocketVoiceChannel channel)
         {
             var topGame = TryGetTopGameInChannel(channel);
-            if (topGame != null && (!channel.Name.Equals(topGame.Name) || !channel.Name.Equals(gamesRepo.GetFriendlyName(topGame.Name)))) 
+            if (topGame != null && (!channel.Name.Equals(topGame) || !channel.Name.Equals(gamesRepo.GetFriendlyName(topGame)))) 
             {
                 var oldChannelName = channel.Name;
-                await channel.ModifyAsync(x => x.Name = gamesRepo.GetFriendlyName(topGame.Name));
+                await channel.ModifyAsync(x => x.Name = gamesRepo.GetFriendlyName(topGame));
                 return true;
             }
             else // Already top game set or game not being played.
@@ -219,16 +219,16 @@ namespace Dynobot.Services
         }
 
         // Try to find the top game, return null if no games exist in channel or no majority game
-        private IActivity TryGetTopGameInChannel(SocketVoiceChannel channel) 
+        private string TryGetTopGameInChannel(SocketVoiceChannel channel) 
         {
-            var gamesDict = new Dictionary<IActivity, int>();
-            IActivity topGame = null;
+            var gamesDict = new Dictionary<string, int>();
+            string topGame = null;
             // TODO: Optimize for one user, perhaps
             foreach (SocketGuildUser person in channel.Users)
             {
                 if (person.Activity != null)
                 {
-                    IActivity game = person.Activity;
+                    string game = person.Activity.Name;
                     int count;
                     if (gamesDict.TryGetValue(game, out count))
                     {
